@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Transaction,
   NewTransactionInput,
@@ -56,6 +56,10 @@ export default function TransactionsSection({
   const [filterType, setFilterType] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRawTx, setSelectedRawTx] = useState<Transaction | null>(null);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const bankOptions = useMemo(() => {
     const set = new Set<string>(Object.keys(BANK_CONFIG));
@@ -114,6 +118,7 @@ export default function TransactionsSection({
           description: '',
         },
       ]);
+      setCurrentPage(1);
     } finally {
       setSubmitting(false);
     }
@@ -144,13 +149,47 @@ export default function TransactionsSection({
     searchQuery,
   ]);
 
+  // Reset to page 1 when filters or page size change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterBank, filterType, filterStartDate, filterEndDate, searchQuery, pageSize]);
+
+  const totalItems = filteredTransactions.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+
+  const paginatedTransactions = useMemo(() => {
+    const start = (safeCurrentPage - 1) * pageSize;
+    return filteredTransactions.slice(start, start + pageSize);
+  }, [filteredTransactions, safeCurrentPage, pageSize]);
+
+  const pageNumbers = useMemo(() => {
+    const pages: (number | '...')[] = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (safeCurrentPage > 3) pages.push('...');
+      const start = Math.max(2, safeCurrentPage - 1);
+      const end = Math.min(totalPages - 1, safeCurrentPage + 1);
+      for (let i = start; i <= end; i++) pages.push(i);
+      if (safeCurrentPage < totalPages - 2) pages.push('...');
+      pages.push(totalPages);
+    }
+    return pages;
+  }, [totalPages, safeCurrentPage]);
+
   const resetFilters = () => {
     setFilterBank('');
     setFilterType('');
     setFilterStartDate('');
     setFilterEndDate('');
     setSearchQuery('');
+    setCurrentPage(1);
   };
+
+  const startItemNum = totalItems === 0 ? 0 : (safeCurrentPage - 1) * pageSize + 1;
+  const endItemNum = Math.min(safeCurrentPage * pageSize, totalItems);
 
   return (
     <div>
@@ -307,15 +346,31 @@ export default function TransactionsSection({
         <div className="app-card-header flex flex-wrap justify-between items-center gap-2">
           <span>
             <i className="fas fa-history mr-2 text-[#4361ee]"></i>
-            ประวัติรายการล่าสุด ({filteredTransactions.length} รายการ)
+            ประวัติรายการล่าสุด ({totalItems.toLocaleString()} รายการ)
           </span>
-          <button
-            type="button"
-            onClick={() => setShowFilter((prev) => !prev)}
-            className="px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 text-xs font-medium cursor-pointer"
-          >
-            <i className="fas fa-filter mr-1.5"></i>ตัวกรอง
-          </button>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 text-xs text-gray-600 font-normal">
+              <span className="hidden sm:inline">แสดงหน้าละ:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value))}
+                className="bg-white border border-gray-300 rounded-lg px-2 py-1 text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#4361ee]"
+              >
+                <option value={10}>10 รายการ</option>
+                <option value={20}>20 รายการ</option>
+                <option value={50}>50 รายการ</option>
+                <option value={100}>100 รายการ</option>
+              </select>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowFilter((prev) => !prev)}
+              className="px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 text-xs font-medium cursor-pointer"
+            >
+              <i className="fas fa-filter mr-1.5"></i>ตัวกรอง
+            </button>
+          </div>
         </div>
 
         <div className="app-card-body">
@@ -416,14 +471,14 @@ export default function TransactionsSection({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-sm">
-                {filteredTransactions.length === 0 ? (
+                {paginatedTransactions.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="py-10 text-center text-gray-400">
                       ไม่พบรายการธุรกรรมตามเงื่อนไขที่เลือก
                     </td>
                   </tr>
                 ) : (
-                  filteredTransactions.map((tx) => {
+                  paginatedTransactions.map((tx) => {
                     const isInc = tx.type === 'income';
                     const rawDate = tx.transaction_date || tx.created_at;
                     const dObj = rawDate ? new Date(rawDate) : null;
@@ -524,12 +579,12 @@ export default function TransactionsSection({
 
           {/* Mobile Card List View (< md) */}
           <div className="md:hidden space-y-3">
-            {filteredTransactions.length === 0 ? (
+            {paginatedTransactions.length === 0 ? (
               <div className="py-8 text-center text-gray-400 text-sm">
                 ไม่พบรายการธุรกรรมตามเงื่อนไขที่เลือก
               </div>
             ) : (
-              filteredTransactions.map((tx) => {
+              paginatedTransactions.map((tx) => {
                 const isInc = tx.type === 'income';
                 const rawDate = tx.transaction_date || tx.created_at;
                 const dObj = rawDate ? new Date(rawDate) : null;
@@ -603,6 +658,73 @@ export default function TransactionsSection({
               })
             )}
           </div>
+
+          {/* Pagination Bar */}
+          {totalItems > 0 && (
+            <div className="mt-6 pt-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="text-xs sm:text-sm text-gray-500">
+                แสดงรายการที่{' '}
+                <span className="font-semibold text-gray-700">
+                  {startItemNum.toLocaleString()}
+                </span>{' '}
+                -{' '}
+                <span className="font-semibold text-gray-700">
+                  {endItemNum.toLocaleString()}
+                </span>{' '}
+                จากทั้งหมด{' '}
+                <span className="font-semibold text-gray-700">
+                  {totalItems.toLocaleString()}
+                </span>{' '}
+                รายการ
+              </div>
+
+              <div className="flex items-center gap-1.5 flex-wrap justify-center">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={safeCurrentPage <= 1}
+                  className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none text-xs font-medium transition cursor-pointer"
+                >
+                  <i className="fas fa-chevron-left mr-1"></i>ก่อนหน้า
+                </button>
+
+                {pageNumbers.map((page, idx) =>
+                  page === '...' ? (
+                    <span
+                      key={`ellipsis-${idx}`}
+                      className="px-2 py-1 text-xs text-gray-400"
+                    >
+                      ...
+                    </span>
+                  ) : (
+                    <button
+                      key={page}
+                      type="button"
+                      onClick={() => setCurrentPage(page)}
+                      className={`min-w-[34px] h-[34px] rounded-lg text-xs font-semibold transition cursor-pointer ${
+                        safeCurrentPage === page
+                          ? 'bg-[#4361ee] text-white shadow-xs'
+                          : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  )
+                )}
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCurrentPage((p) => Math.min(totalPages, p + 1))
+                  }
+                  disabled={safeCurrentPage >= totalPages}
+                  className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none text-xs font-medium transition cursor-pointer"
+                >
+                  ถัดไป<i className="fas fa-chevron-right ml-1"></i>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
