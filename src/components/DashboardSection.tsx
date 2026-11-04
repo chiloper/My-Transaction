@@ -115,8 +115,8 @@ export default function DashboardSection({
     };
   }, [monthlyTxs]);
 
-  // Grouping helper for Doughnut Charts
-  const buildChartData = (type: 'income' | 'expense') => {
+  // Grouping helper for Doughnut Charts + Custom Scrollable Legend
+  const buildChartBundle = (type: 'income' | 'expense') => {
     const map: Record<string, number> = {};
     monthlyTxs
       .filter((t) => t.type === type)
@@ -128,43 +128,48 @@ export default function DashboardSection({
         map[key] = (map[key] || 0) + Number(t.amount || 0);
       });
 
-    // Sort by amount descending, group tail if > 8 items
     const entries = Object.entries(map).sort((a, b) => b[1] - a[1]);
-    const topEntries = entries.slice(0, 8);
-    if (entries.length > 8) {
-      const otherSum = entries.slice(8).reduce((s, item) => s + item[1], 0);
-      topEntries.push(['อื่นๆ', otherSum]);
-    }
+    const totalSum = entries.reduce((s, e) => s + e[1], 0);
 
-    const labels = topEntries.map((e) => e[0]);
-    const data = topEntries.map((e) => e[1]);
+    const labels = entries.map((e) => e[0]);
+    const data = entries.map((e) => e[1]);
     const colors = labels.map((label, idx) =>
       groupBy === 'bank'
         ? getBankColor(label, idx)
         : CHART_PALETTE[idx % CHART_PALETTE.length]
     );
 
+    const legendItems = entries.map(([label, amount], idx) => ({
+      label,
+      amount,
+      color: colors[idx],
+      pct: totalSum > 0 ? (amount / totalSum) * 100 : 0,
+    }));
+
     return {
-      labels,
-      datasets: [
-        {
-          data,
-          backgroundColor: colors,
-          borderWidth: 0,
-          hoverOffset: 10,
-        },
-      ],
+      chartData: {
+        labels,
+        datasets: [
+          {
+            data,
+            backgroundColor: colors,
+            borderWidth: 0,
+            hoverOffset: 8,
+          },
+        ],
+      },
+      legendItems,
     };
   };
 
-  const incomeChartData = useMemo(
-    () => buildChartData('income'),
+  const incomeBundle = useMemo(
+    () => buildChartBundle('income'),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [monthlyTxs, groupBy]
   );
 
-  const expenseChartData = useMemo(
-    () => buildChartData('expense'),
+  const expenseBundle = useMemo(
+    () => buildChartBundle('expense'),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [monthlyTxs, groupBy]
   );
@@ -176,12 +181,7 @@ export default function DashboardSection({
     animation: { duration: 400 },
     plugins: {
       legend: {
-        position: 'bottom' as const,
-        labels: {
-          boxWidth: 12,
-          padding: 12,
-          font: { family: 'Prompt', size: 12 },
-        },
+        display: false,
       },
       tooltip: {
         callbacks: {
@@ -380,17 +380,50 @@ export default function DashboardSection({
             </span>
             <i className="fas fa-chart-pie text-[#2ecc71]"></i>
           </div>
-          <div className="app-card-body flex-1 flex items-center justify-center">
-            <div className="relative h-[280px] w-full">
-              {incomeChartData.labels.length > 0 ? (
-                <Doughnut data={incomeChartData} options={doughnutOptions} />
-              ) : (
-                <div className="h-full flex flex-col items-center justify-center text-gray-400 text-sm">
-                  <i className="fas fa-inbox text-3xl mb-2 opacity-50"></i>
-                  <span>ไม่มีข้อมูลรายรับในเดือนนี้</span>
+          <div className="app-card-body flex-1 flex flex-col">
+            {incomeBundle.legendItems.length > 0 ? (
+              <>
+                <div className="relative h-[180px] w-full shrink-0">
+                  <Doughnut data={incomeBundle.chartData} options={doughnutOptions} />
                 </div>
-              )}
-            </div>
+                <div className="mt-4 pt-3 border-t border-gray-100">
+                  <div
+                    className={`space-y-2 ${
+                      incomeBundle.legendItems.length > 4
+                        ? 'max-h-[136px] overflow-y-auto pr-1.5 custom-scrollbar'
+                        : ''
+                    }`}
+                  >
+                    {incomeBundle.legendItems.map((item) => (
+                      <div
+                        key={item.label}
+                        className="flex items-center justify-between gap-2 text-xs"
+                        title={`${item.label} — ฿${item.amount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} (${item.pct.toFixed(1)}%)`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span
+                            className="w-3 h-3 rounded-xs shrink-0"
+                            style={{ backgroundColor: item.color }}
+                          ></span>
+                          <span className="text-gray-700 truncate">{item.label}</span>
+                        </div>
+                        <div className="shrink-0 text-right font-medium text-gray-800">
+                          ฿{item.amount.toLocaleString('th-TH', { maximumFractionDigits: 0 })}{' '}
+                          <span className="text-gray-400 text-[11px]">
+                            ({item.pct.toFixed(1)}%)
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="h-[260px] flex flex-col items-center justify-center text-gray-400 text-sm">
+                <i className="fas fa-inbox text-3xl mb-2 opacity-50"></i>
+                <span>ไม่มีข้อมูลรายรับในเดือนนี้</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -402,17 +435,50 @@ export default function DashboardSection({
             </span>
             <i className="fas fa-chart-pie text-[#e63946]"></i>
           </div>
-          <div className="app-card-body flex-1 flex items-center justify-center">
-            <div className="relative h-[280px] w-full">
-              {expenseChartData.labels.length > 0 ? (
-                <Doughnut data={expenseChartData} options={doughnutOptions} />
-              ) : (
-                <div className="h-full flex flex-col items-center justify-center text-gray-400 text-sm">
-                  <i className="fas fa-inbox text-3xl mb-2 opacity-50"></i>
-                  <span>ไม่มีข้อมูลรายจ่ายในเดือนนี้</span>
+          <div className="app-card-body flex-1 flex flex-col">
+            {expenseBundle.legendItems.length > 0 ? (
+              <>
+                <div className="relative h-[180px] w-full shrink-0">
+                  <Doughnut data={expenseBundle.chartData} options={doughnutOptions} />
                 </div>
-              )}
-            </div>
+                <div className="mt-4 pt-3 border-t border-gray-100">
+                  <div
+                    className={`space-y-2 ${
+                      expenseBundle.legendItems.length > 4
+                        ? 'max-h-[136px] overflow-y-auto pr-1.5 custom-scrollbar'
+                        : ''
+                    }`}
+                  >
+                    {expenseBundle.legendItems.map((item) => (
+                      <div
+                        key={item.label}
+                        className="flex items-center justify-between gap-2 text-xs"
+                        title={`${item.label} — ฿${item.amount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} (${item.pct.toFixed(1)}%)`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span
+                            className="w-3 h-3 rounded-xs shrink-0"
+                            style={{ backgroundColor: item.color }}
+                          ></span>
+                          <span className="text-gray-700 truncate">{item.label}</span>
+                        </div>
+                        <div className="shrink-0 text-right font-medium text-gray-800">
+                          ฿{item.amount.toLocaleString('th-TH', { maximumFractionDigits: 0 })}{' '}
+                          <span className="text-gray-400 text-[11px]">
+                            ({item.pct.toFixed(1)}%)
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="h-[260px] flex flex-col items-center justify-center text-gray-400 text-sm">
+                <i className="fas fa-inbox text-3xl mb-2 opacity-50"></i>
+                <span>ไม่มีข้อมูลรายจ่ายในเดือนนี้</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -422,9 +488,15 @@ export default function DashboardSection({
             <span>สรุปแยกตามธนาคาร</span>
             <i className="fas fa-university text-[#4361ee]"></i>
           </div>
-          <div className="app-card-body overflow-y-auto max-h-[320px] space-y-4">
+          <div
+            className={`app-card-body space-y-4 ${
+              bankSummary.length > 5
+                ? 'overflow-y-auto max-h-[340px] custom-scrollbar'
+                : ''
+            }`}
+          >
             {bankSummary.length === 0 ? (
-              <div className="h-[240px] flex flex-col items-center justify-center text-gray-400 text-sm">
+              <div className="h-[280px] flex flex-col items-center justify-center text-gray-400 text-sm">
                 <i className="fas fa-search text-2xl mb-2 opacity-50"></i>
                 <span>ยังไม่มีรายการธุรกรรมในเดือนนี้</span>
               </div>
@@ -437,18 +509,18 @@ export default function DashboardSection({
 
                 return (
                   <div key={item.bank} className="space-y-1.5">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="font-semibold text-gray-800 flex items-center gap-2">
+                    <div className="flex justify-between items-center text-xs gap-2">
+                      <span className="font-semibold text-gray-800 flex items-center gap-2 min-w-0 truncate">
                         <span
-                          className="w-2.5 h-2.5 rounded-full inline-block"
+                          className="w-2.5 h-2.5 rounded-full inline-block shrink-0"
                           style={{ backgroundColor: bankColor }}
                         ></span>
-                        {item.bank}
-                        <span className="text-gray-400 font-normal">
+                        <span className="truncate">{item.bank}</span>
+                        <span className="text-gray-400 font-normal shrink-0">
                           ({item.count} รายการ)
                         </span>
                       </span>
-                      <span className="font-medium text-gray-600">
+                      <span className="font-medium text-gray-600 shrink-0">
                         {item.income > 0 && (
                           <span className="text-emerald-600 mr-2">
                             +฿{item.income.toLocaleString()}
