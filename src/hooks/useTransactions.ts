@@ -2,8 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Swal from 'sweetalert2';
+import { getSupabaseClient } from '@/lib/supabase';
 import { NewTransactionInput, Transaction } from '@/types/transaction';
 import { getTxDateKey } from '@/utils/dateUtils';
+
+const MISSING_ENV_ERROR =
+  'กรุณาตั้งค่า NEXT_PUBLIC_SUPABASE_URL และ NEXT_PUBLIC_SUPABASE_ANON_KEY ใน .env.local หรือ GitHub Actions Secrets';
 
 export function useTransactions() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -16,20 +20,43 @@ export function useTransactions() {
   const fetchTransactions = useCallback(async () => {
     setLoading(true);
     setErrorMessage(null);
-    try {
-      const res = await fetch('/api/transactions', { cache: 'no-store' });
-      const json = await res.json();
 
-      if (!res.ok) {
+    const { supabase, schema, isConfigured } = getSupabaseClient();
+    if (!isConfigured || !supabase) {
+      setTransactions([]);
+      setErrorMessage(MISSING_ENV_ERROR);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .schema(schema)
+        .from('transactions')
+        .select('*')
+        .order('transaction_date', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false });
+
+      if (error) {
         setTransactions([]);
-        const hintSuffix = json.hint ? ` (${json.hint})` : '';
-        setErrorMessage(
-          `${json.error || 'ไม่สามารถดึงข้อมูลจาก Supabase ได้'}${hintSuffix}`
-        );
+        const hint =
+          error.code === 'PGRST106'
+            ? ` (กรุณาเพิ่ม "${schema}" ใน Supabase Settings -> API -> Exposed schemas)`
+            : '';
+        setErrorMessage(`${error.message}${hint}`);
         return;
       }
 
-      const rows: Transaction[] = json.data || [];
+      const rows: Transaction[] = (data || []).map(
+        (row: Record<string, unknown>) => ({
+          ...(row as unknown as Transaction),
+          amount:
+            row.amount !== null && row.amount !== undefined
+              ? Number(row.amount)
+              : 0,
+        })
+      );
+
       setTransactions(rows);
 
       if (rows.length > 0) {
@@ -45,7 +72,7 @@ export function useTransactions() {
     } catch (err: unknown) {
       setTransactions([]);
       setErrorMessage(
-        err instanceof Error ? err.message : 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้'
+        err instanceof Error ? err.message : 'ไม่สามารถเชื่อมต่อ Supabase ได้'
       );
     } finally {
       setLoading(false);
@@ -68,20 +95,34 @@ export function useTransactions() {
 
   const addTransactions = useCallback(
     async (items: NewTransactionInput[]) => {
-      const res = await fetch('/api/transactions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transactions: items }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        Swal.fire(
-          'เกิดข้อผิดพลาด',
-          json.error || 'ไม่สามารถบันทึกข้อมูลได้',
-          'error'
-        );
+      const { supabase, schema, isConfigured } = getSupabaseClient();
+      if (!isConfigured || !supabase) {
+        Swal.fire('เกิดข้อผิดพลาด', MISSING_ENV_ERROR, 'error');
         return;
       }
+
+      const rowsToInsert = items.map((item) => ({
+        type: item.type === 'income' ? 'income' : 'expense',
+        amount: Number(item.amount) || 0,
+        description: item.description ? String(item.description) : null,
+        transaction_date: item.transaction_date
+          ? new Date(String(item.transaction_date)).toISOString()
+          : new Date().toISOString(),
+        bank: item.bank ? String(item.bank) : null,
+        email_id: item.email_id ? String(item.email_id) : null,
+        raw_body: item.raw_body ? String(item.raw_body) : null,
+      }));
+
+      const { error } = await supabase
+        .schema(schema)
+        .from('transactions')
+        .insert(rowsToInsert);
+
+      if (error) {
+        Swal.fire('เกิดข้อผิดพลาด', error.message, 'error');
+        return;
+      }
+
       await fetchTransactions();
       Swal.fire({
         title: 'สำเร็จ',
@@ -95,6 +136,12 @@ export function useTransactions() {
   );
 
   const deleteTransaction = useCallback(async (id: number) => {
+    const { supabase, schema, isConfigured } = getSupabaseClient();
+    if (!isConfigured || !supabase) {
+      Swal.fire('เกิดข้อผิดพลาด', MISSING_ENV_ERROR, 'error');
+      return;
+    }
+
     const confirm = await Swal.fire({
       title: 'ลบรายการนี้?',
       text: 'คุณต้องการลบรายการธุรกรรมนี้ใช่หรือไม่',
@@ -108,14 +155,17 @@ export function useTransactions() {
 
     if (!confirm.isConfirmed) return;
 
-    const res = await fetch(`/api/transactions?id=${id}`, {
-      method: 'DELETE',
-    });
-    const json = await res.json();
-    if (!res.ok) {
-      Swal.fire('เกิดข้อผิดพลาด', json.error || 'ลบไม่สำเร็จ', 'error');
+    const { error } = await supabase
+      .schema(schema)
+      .from('transactions')
+      .delete()
+      .eq('id', Number(id));
+
+    if (error) {
+      Swal.fire('เกิดข้อผิดพลาด', error.message, 'error');
       return;
     }
+
     setTransactions((prev) => prev.filter((t) => t.id !== id));
     Swal.fire({
       title: 'ลบสำเร็จ',
