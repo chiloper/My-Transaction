@@ -2,17 +2,22 @@
 
 import React, { useMemo, useState } from 'react';
 import {
-  Chart as ChartJS,
   ArcElement,
-  Tooltip,
-  Legend,
-  CategoryScale,
-  LinearScale,
   BarElement,
+  CategoryScale,
+  Chart as ChartJS,
+  Legend,
+  LinearScale,
   Title,
+  Tooltip,
 } from 'chart.js';
-import { Doughnut, Bar } from 'react-chartjs-2';
-import { Transaction, CHART_PALETTE, getBankColor } from '@/types/transaction';
+import { Transaction } from '@/types/transaction';
+import { getTxDateKey } from '@/utils/dateUtils';
+import DashboardHeader, { GroupByOption } from './dashboard/DashboardHeader';
+import SummaryStatCards from './dashboard/SummaryStatCards';
+import ProportionDoughnutCard from './dashboard/ProportionDoughnutCard';
+import BankBreakdownCard from './dashboard/BankBreakdownCard';
+import YearlyTrendBarChart from './dashboard/YearlyTrendBarChart';
 
 ChartJS.register(
   ArcElement,
@@ -31,74 +36,19 @@ interface DashboardSectionProps {
   availableMonths: string[];
 }
 
-const THAI_MONTHS_SHORT = [
-  'ม.ค.',
-  'ก.พ.',
-  'มี.ค.',
-  'เม.ย.',
-  'พ.ค.',
-  'มิ.ย.',
-  'ก.ค.',
-  'ส.ค.',
-  'ก.ย.',
-  'ต.ค.',
-  'พ.ย.',
-  'ธ.ค.',
-];
-
-export function formatMonthThai(ym: string): string {
-  if (ym === 'ALL') return 'ทั้งหมดทุกเดือน';
-  const [y, m] = ym.split('-');
-  const yearNum = parseInt(y, 10);
-  const monthIdx = parseInt(m, 10) - 1;
-  if (isNaN(yearNum) || isNaN(monthIdx) || monthIdx < 0 || monthIdx > 11) return ym;
-  const date = new Date(yearNum, monthIdx, 1);
-  const monthLong = date.toLocaleDateString('th-TH', { month: 'long' });
-  return `${monthLong} ${yearNum + 543}`;
-}
-
-export function getTxDateKey(tx: Transaction): string {
-  const raw = tx.transaction_date || tx.created_at;
-  if (!raw) return '';
-  try {
-    const d = new Date(raw);
-    if (isNaN(d.getTime())) return raw.slice(0, 10);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  } catch {
-    return String(raw).slice(0, 10);
-  }
-}
-
 export default function DashboardSection({
   transactions,
   selectedMonth,
   setSelectedMonth,
   availableMonths,
-}: DashboardSectionProps) {
-  const [groupBy, setGroupBy] = useState<'bank' | 'description'>('bank');
+}: Readonly<DashboardSectionProps>) {
+  const [groupBy, setGroupBy] = useState<GroupByOption>('bank');
 
-  const availableYears = useMemo(() => {
-    const years = new Set<number>();
-    years.add(new Date().getFullYear());
-    transactions.forEach((tx) => {
-      const dateStr = getTxDateKey(tx);
-      if (dateStr.length >= 4) {
-        const y = parseInt(dateStr.slice(0, 4), 10);
-        if (!isNaN(y)) years.add(y);
-      }
-    });
-    return Array.from(years).sort((a, b) => b - a);
-  }, [transactions]);
-
-  const [selectedYear, setSelectedYear] = useState<number>(() => new Date().getFullYear());
-
-  // Filtered transactions for selected month
   const monthlyTxs = useMemo(() => {
     if (selectedMonth === 'ALL') return transactions;
-    return transactions.filter((t) => getTxDateKey(t).startsWith(selectedMonth));
+    return transactions.filter((t) =>
+      getTxDateKey(t).startsWith(selectedMonth)
+    );
   }, [transactions, selectedMonth]);
 
   const { totalIncome, totalExpense, balance } = useMemo(() => {
@@ -115,463 +65,51 @@ export default function DashboardSection({
     };
   }, [monthlyTxs]);
 
-  // Grouping helper for Doughnut Charts + Custom Scrollable Legend
-  const buildChartBundle = (type: 'income' | 'expense') => {
-    const map: Record<string, number> = {};
-    monthlyTxs
-      .filter((t) => t.type === type)
-      .forEach((t) => {
-        const key =
-          groupBy === 'bank'
-            ? (t.bank || 'ไม่ระบุธนาคาร').trim()
-            : (t.description || t.bank || 'ไม่ระบุรายละเอียด').trim();
-        map[key] = (map[key] || 0) + Number(t.amount || 0);
-      });
-
-    const entries = Object.entries(map).sort((a, b) => b[1] - a[1]);
-    const totalSum = entries.reduce((s, e) => s + e[1], 0);
-
-    const labels = entries.map((e) => e[0]);
-    const data = entries.map((e) => e[1]);
-    const colors = labels.map((label, idx) =>
-      groupBy === 'bank'
-        ? getBankColor(label, idx)
-        : CHART_PALETTE[idx % CHART_PALETTE.length]
-    );
-
-    const legendItems = entries.map(([label, amount], idx) => ({
-      label,
-      amount,
-      color: colors[idx],
-      pct: totalSum > 0 ? (amount / totalSum) * 100 : 0,
-    }));
-
-    return {
-      chartData: {
-        labels,
-        datasets: [
-          {
-            data,
-            backgroundColor: colors,
-            borderWidth: 0,
-            hoverOffset: 8,
-          },
-        ],
-      },
-      legendItems,
-    };
-  };
-
-  const incomeBundle = useMemo(
-    () => buildChartBundle('income'),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [monthlyTxs, groupBy]
-  );
-
-  const expenseBundle = useMemo(
-    () => buildChartBundle('expense'),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [monthlyTxs, groupBy]
-  );
-
-  const doughnutOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    cutout: '68%',
-    animation: { duration: 400 },
-    plugins: {
-      legend: {
-        display: false,
-      },
-      tooltip: {
-        callbacks: {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          label: (ctx: any) => {
-            const val = Number(ctx.raw || 0);
-            return ` ${ctx.label}: ฿${val.toLocaleString('th-TH', { minimumFractionDigits: 2 })}`;
-          },
-        },
-      },
-    },
-  };
-
-  // Bank Breakdown Summary for the 3rd card
-  const bankSummary = useMemo(() => {
-    const map: Record<
-      string,
-      { bank: string; income: number; expense: number; count: number }
-    > = {};
-    monthlyTxs.forEach((t) => {
-      const b = (t.bank || 'ไม่ระบุธนาคาร').trim();
-      if (!map[b]) {
-        map[b] = { bank: b, income: 0, expense: 0, count: 0 };
-      }
-      if (t.type === 'income') map[b].income += Number(t.amount || 0);
-      else map[b].expense += Number(t.amount || 0);
-      map[b].count += 1;
-    });
-    return Object.values(map).sort(
-      (a, b) => b.expense + b.income - (a.expense + a.income)
-    );
-  }, [monthlyTxs]);
-
-  // Yearly Bar Chart Data
-  const yearChartData = useMemo(() => {
-    const incData: number[] = [];
-    const expData: number[] = [];
-
-    for (let i = 0; i < 12; i++) {
-      const mPrefix = `${selectedYear}-${String(i + 1).padStart(2, '0')}`;
-      const mTxs = transactions.filter((t) => getTxDateKey(t).startsWith(mPrefix));
-      const inc = mTxs
-        .filter((t) => t.type === 'income')
-        .reduce((s, t) => s + Number(t.amount || 0), 0);
-      const exp = mTxs
-        .filter((t) => t.type === 'expense')
-        .reduce((s, t) => s + Number(t.amount || 0), 0);
-      incData.push(inc);
-      expData.push(exp);
-    }
-
-    return {
-      labels: THAI_MONTHS_SHORT,
-      datasets: [
-        {
-          label: 'รายรับ',
-          data: incData,
-          backgroundColor: '#2ecc71',
-          borderRadius: 6,
-        },
-        {
-          label: 'รายจ่าย',
-          data: expData,
-          backgroundColor: '#f72585',
-          borderRadius: 6,
-        },
-      ],
-    };
-  }, [transactions, selectedYear]);
-
-  const barOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    scales: {
-      y: {
-        beginAtZero: true,
-        grid: { color: '#f0f0f0' },
-        ticks: {
-          font: { family: 'Prompt', size: 11 },
-          callback: (val: string | number) => `฿${Number(val).toLocaleString()}`,
-        },
-      },
-      x: {
-        grid: { display: false },
-        ticks: { font: { family: 'Prompt', size: 12 } },
-      },
-    },
-    plugins: {
-      legend: {
-        position: 'top' as const,
-        align: 'end' as const,
-        labels: { font: { family: 'Prompt', size: 12 } },
-      },
-      tooltip: {
-        callbacks: {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          label: (ctx: any) => {
-            const val = Number(ctx.raw || 0);
-            return ` ${ctx.dataset.label}: ฿${val.toLocaleString('th-TH', { minimumFractionDigits: 2 })}`;
-          },
-        },
-      },
-    },
-  };
+  const groupSuffix = groupBy === 'bank' ? 'ธนาคาร' : 'รายละเอียด';
 
   return (
     <div>
-      {/* Header + Month Selector */}
-      <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
-        <div>
-          <h4 className="text-xl font-bold text-gray-800 mb-1">ภาพรวมการเงิน</h4>
-          <p className="text-sm text-gray-500 m-0">
-            สรุปข้อมูลประจำเดือน{' '}
-            <span className="font-semibold text-[#4361ee]">
-              {formatMonthThai(selectedMonth)}
-            </span>
-          </p>
-        </div>
+      <DashboardHeader
+        selectedMonth={selectedMonth}
+        onSelectMonth={setSelectedMonth}
+        availableMonths={availableMonths}
+        groupBy={groupBy}
+        onChangeGroupBy={setGroupBy}
+      />
 
-        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-          <div className="inline-flex rounded-lg bg-white p-1 shadow-xs border border-gray-200 text-xs">
-            <button
-              type="button"
-              onClick={() => setGroupBy('bank')}
-              className={`px-3 py-1.5 rounded-md font-medium transition cursor-pointer ${
-                groupBy === 'bank'
-                  ? 'bg-[#4361ee] text-white'
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              <i className="fas fa-university mr-1.5"></i>แยกตามธนาคาร
-            </button>
-            <button
-              type="button"
-              onClick={() => setGroupBy('description')}
-              className={`px-3 py-1.5 rounded-md font-medium transition cursor-pointer ${
-                groupBy === 'description'
-                  ? 'bg-[#4361ee] text-white'
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              <i className="fas fa-list-ul mr-1.5"></i>แยกตามรายการ
-            </button>
-          </div>
+      <SummaryStatCards
+        totalIncome={totalIncome}
+        totalExpense={totalExpense}
+        balance={balance}
+      />
 
-          <select
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className="bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-sm font-medium text-gray-700 shadow-xs focus:outline-none focus:ring-2 focus:ring-[#4361ee] flex-1 sm:flex-none sm:w-52"
-          >
-            <option value="ALL">ดูทั้งหมดทุกเดือน</option>
-            {availableMonths.map((m) => (
-              <option key={m} value={m}>
-                {formatMonthThai(m)}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* 3 Stat Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="stat-card bg-gradient-success">
-          <i className="fas fa-arrow-up icon-bg"></i>
-          <p>รายรับรวม</p>
-          <h3>
-            ฿{totalIncome.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </h3>
-        </div>
-
-        <div className="stat-card bg-gradient-danger">
-          <i className="fas fa-arrow-down icon-bg"></i>
-          <p>รายจ่ายรวม</p>
-          <h3>
-            ฿{totalExpense.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </h3>
-        </div>
-
-        <div className="stat-card bg-gradient-primary">
-          <i className="fas fa-wallet icon-bg"></i>
-          <p>คงเหลือสุทธิ</p>
-          <h3>
-            {balance < 0 ? '-' : ''}฿
-            {Math.abs(balance).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </h3>
-        </div>
-      </div>
-
-      {/* 3 Middle Cards: Income Pie, Expense Pie, Bank Summary */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        {/* Income Chart */}
-        <div className="app-card mb-0 flex flex-col">
-          <div className="app-card-header flex justify-between items-center">
-            <span>
-              สัดส่วนรายรับ ({groupBy === 'bank' ? 'ธนาคาร' : 'รายละเอียด'})
-            </span>
-            <i className="fas fa-chart-pie text-[#2ecc71]"></i>
-          </div>
-          <div className="app-card-body flex-1 flex flex-col">
-            {incomeBundle.legendItems.length > 0 ? (
-              <>
-                <div className="relative h-[180px] w-full shrink-0">
-                  <Doughnut data={incomeBundle.chartData} options={doughnutOptions} />
-                </div>
-                <div className="mt-4 pt-3 border-t border-gray-100">
-                  <div
-                    className={`space-y-2 ${
-                      incomeBundle.legendItems.length > 4
-                        ? 'max-h-[136px] overflow-y-auto pr-1.5 custom-scrollbar'
-                        : ''
-                    }`}
-                  >
-                    {incomeBundle.legendItems.map((item) => (
-                      <div
-                        key={item.label}
-                        className="flex items-center justify-between gap-2 text-xs"
-                        title={`${item.label} — ฿${item.amount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} (${item.pct.toFixed(1)}%)`}
-                      >
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <span
-                            className="w-3 h-3 rounded-xs shrink-0"
-                            style={{ backgroundColor: item.color }}
-                          ></span>
-                          <span className="text-gray-700 truncate">{item.label}</span>
-                        </div>
-                        <div className="shrink-0 text-right font-medium text-gray-800">
-                          ฿{item.amount.toLocaleString('th-TH', { maximumFractionDigits: 0 })}{' '}
-                          <span className="text-gray-400 text-[11px]">
-                            ({item.pct.toFixed(1)}%)
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="h-[260px] flex flex-col items-center justify-center text-gray-400 text-sm">
-                <i className="fas fa-inbox text-3xl mb-2 opacity-50"></i>
-                <span>ไม่มีข้อมูลรายรับในเดือนนี้</span>
-              </div>
-            )}
-          </div>
-        </div>
 
-        {/* Expense Chart */}
-        <div className="app-card mb-0 flex flex-col">
-          <div className="app-card-header flex justify-between items-center">
-            <span>
-              สัดส่วนรายจ่าย ({groupBy === 'bank' ? 'ธนาคาร' : 'รายละเอียด'})
-            </span>
-            <i className="fas fa-chart-pie text-[#e63946]"></i>
-          </div>
-          <div className="app-card-body flex-1 flex flex-col">
-            {expenseBundle.legendItems.length > 0 ? (
-              <>
-                <div className="relative h-[180px] w-full shrink-0">
-                  <Doughnut data={expenseBundle.chartData} options={doughnutOptions} />
-                </div>
-                <div className="mt-4 pt-3 border-t border-gray-100">
-                  <div
-                    className={`space-y-2 ${
-                      expenseBundle.legendItems.length > 4
-                        ? 'max-h-[136px] overflow-y-auto pr-1.5 custom-scrollbar'
-                        : ''
-                    }`}
-                  >
-                    {expenseBundle.legendItems.map((item) => (
-                      <div
-                        key={item.label}
-                        className="flex items-center justify-between gap-2 text-xs"
-                        title={`${item.label} — ฿${item.amount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} (${item.pct.toFixed(1)}%)`}
-                      >
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <span
-                            className="w-3 h-3 rounded-xs shrink-0"
-                            style={{ backgroundColor: item.color }}
-                          ></span>
-                          <span className="text-gray-700 truncate">{item.label}</span>
-                        </div>
-                        <div className="shrink-0 text-right font-medium text-gray-800">
-                          ฿{item.amount.toLocaleString('th-TH', { maximumFractionDigits: 0 })}{' '}
-                          <span className="text-gray-400 text-[11px]">
-                            ({item.pct.toFixed(1)}%)
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="h-[260px] flex flex-col items-center justify-center text-gray-400 text-sm">
-                <i className="fas fa-inbox text-3xl mb-2 opacity-50"></i>
-                <span>ไม่มีข้อมูลรายจ่ายในเดือนนี้</span>
-              </div>
-            )}
-          </div>
-        </div>
+        <ProportionDoughnutCard
+          title={`สัดส่วนรายจ่าย (${groupSuffix})`}
+          iconColorClass="text-[#e63946]"
+          emptyMessage="ไม่มีข้อมูลรายจ่ายในเดือนนี้"
+          type="expense"
+          transactions={monthlyTxs}
+          groupBy={groupBy}
+        />
 
-        {/* Bank Breakdown Card */}
-        <div className="app-card mb-0 flex flex-col">
-          <div className="app-card-header flex justify-between items-center">
-            <span>สรุปแยกตามธนาคาร</span>
-            <i className="fas fa-university text-[#4361ee]"></i>
-          </div>
-          <div
-            className={`app-card-body space-y-4 ${
-              bankSummary.length > 5
-                ? 'overflow-y-auto max-h-[340px] custom-scrollbar'
-                : ''
-            }`}
-          >
-            {bankSummary.length === 0 ? (
-              <div className="h-[280px] flex flex-col items-center justify-center text-gray-400 text-sm">
-                <i className="fas fa-search text-2xl mb-2 opacity-50"></i>
-                <span>ยังไม่มีรายการธุรกรรมในเดือนนี้</span>
-              </div>
-            ) : (
-              bankSummary.map((item, idx) => {
-                const maxTotal = Math.max(totalIncome + totalExpense, 1);
-                const bankTotal = item.income + item.expense;
-                const pct = Math.min((bankTotal / maxTotal) * 100, 100);
-                const bankColor = getBankColor(item.bank, idx);
+        <ProportionDoughnutCard
+          title={`สัดส่วนรายรับ (${groupSuffix})`}
+          iconColorClass="text-[#2ecc71]"
+          emptyMessage="ไม่มีข้อมูลรายรับในเดือนนี้"
+          type="income"
+          transactions={monthlyTxs}
+          groupBy={groupBy}
+        />
 
-                return (
-                  <div key={item.bank} className="space-y-1.5">
-                    <div className="flex justify-between items-center text-xs gap-2">
-                      <span className="font-semibold text-gray-800 flex items-center gap-2 min-w-0 truncate">
-                        <span
-                          className="w-2.5 h-2.5 rounded-full inline-block shrink-0"
-                          style={{ backgroundColor: bankColor }}
-                        ></span>
-                        <span className="truncate">{item.bank}</span>
-                        <span className="text-gray-400 font-normal shrink-0">
-                          ({item.count} รายการ)
-                        </span>
-                      </span>
-                      <span className="font-medium text-gray-600 shrink-0">
-                        {item.income > 0 && (
-                          <span className="text-emerald-600 mr-2">
-                            +฿{item.income.toLocaleString()}
-                          </span>
-                        )}
-                        {item.expense > 0 && (
-                          <span className="text-rose-600">
-                            -฿{item.expense.toLocaleString()}
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                    <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-500"
-                        style={{
-                          width: `${pct}%`,
-                          backgroundColor: bankColor,
-                        }}
-                      ></div>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
+        <BankBreakdownCard
+          transactions={monthlyTxs}
+          totalVolume={totalIncome + totalExpense}
+        />
       </div>
 
-      {/* Yearly Summary Bar Chart */}
-      <div className="app-card">
-        <div className="app-card-header flex flex-wrap justify-between items-center gap-2">
-          <span>แนวโน้มรายรับ-รายจ่าย ตลอดปี (พ.ศ. {selectedYear + 543})</span>
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(Number(e.target.value))}
-            className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-1 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#4361ee]"
-          >
-            {availableYears.map((y) => (
-              <option key={y} value={y}>
-                ปี พ.ศ. {y + 543} ({y})
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="app-card-body">
-          <div className="h-[320px] sm:h-[350px] w-full">
-            <Bar data={yearChartData} options={barOptions} />
-          </div>
-        </div>
-      </div>
+      <YearlyTrendBarChart transactions={transactions} />
     </div>
   );
 }
