@@ -103,21 +103,22 @@ export default function DashboardSection({
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        <ProportionDoughnutCard
-          title={`สัดส่วนรายรับ (${groupSuffix})`}
-          iconColorClass="text-[#2ecc71]"
-          emptyMessage="ไม่มีข้อมูลรายรับในเดือนนี้"
-          type="income"
-          bankSummaryRows={bankSummaryRows}
-          transactions={descTransactions}
-          groupBy={groupBy}
-        />
 
         <ProportionDoughnutCard
           title={`สัดส่วนรายจ่าย (${groupSuffix})`}
           iconColorClass="text-[#e63946]"
           emptyMessage="ไม่มีข้อมูลรายจ่ายในเดือนนี้"
           type="expense"
+          bankSummaryRows={bankSummaryRows}
+          transactions={descTransactions}
+          groupBy={groupBy}
+        />
+
+        <ProportionDoughnutCard
+          title={`สัดส่วนรายรับ (${groupSuffix})`}
+          iconColorClass="text-[#2ecc71]"
+          emptyMessage="ไม่มีข้อมูลรายรับในเดือนนี้"
+          type="income"
           bankSummaryRows={bankSummaryRows}
           transactions={descTransactions}
           groupBy={groupBy}
