@@ -1,15 +1,16 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import { getBankColor, Transaction } from '@/types/transaction';
+import { MonthlyBankSummaryRow } from '@/services/transactionService';
+import { getBankColor } from '@/types/transaction';
 
 interface BankBreakdownCardProps {
-  transactions: Transaction[];
+  bankSummaryRows: MonthlyBankSummaryRow[];
   totalVolume: number;
 }
 
 export default function BankBreakdownCard({
-  transactions,
+  bankSummaryRows,
   totalVolume,
 }: Readonly<BankBreakdownCardProps>) {
   const bankSummary = useMemo(() => {
@@ -18,20 +19,20 @@ export default function BankBreakdownCard({
       { bank: string; income: number; expense: number; count: number }
     > = {};
 
-    transactions.forEach((t) => {
-      const b = (t.bank || 'ไม่ระบุธนาคาร').trim();
+    bankSummaryRows.forEach((row) => {
+      const b = (row.bank || 'ไม่ระบุธนาคาร').trim();
       if (!map[b]) {
         map[b] = { bank: b, income: 0, expense: 0, count: 0 };
       }
-      if (t.type === 'income') map[b].income += Number(t.amount || 0);
-      else map[b].expense += Number(t.amount || 0);
-      map[b].count += 1;
+      if (row.type === 'income') map[b].income += Number(row.total_amount || 0);
+      else map[b].expense += Number(row.total_amount || 0);
+      map[b].count += Number(row.tx_count || 0);
     });
 
     return Object.values(map).sort(
       (a, b) => b.expense + b.income - (a.expense + a.income)
     );
-  }, [transactions]);
+  }, [bankSummaryRows]);
 
   return (
     <div className="app-card mb-0 flex flex-col">
@@ -69,7 +70,7 @@ export default function BankBreakdownCard({
                     ></span>
                     <span className="truncate">{item.bank}</span>
                     <span className="text-gray-400 font-normal shrink-0">
-                      ({item.count} รายการ)
+                      ({item.count.toLocaleString()} รายการ)
                     </span>
                   </span>
                   <span className="font-medium text-gray-600 shrink-0">

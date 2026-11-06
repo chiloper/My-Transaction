@@ -1,12 +1,16 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Bar } from 'react-chartjs-2';
-import { Transaction } from '@/types/transaction';
-import { getTxDateKey, THAI_MONTHS_SHORT } from '@/utils/dateUtils';
+import {
+  fetchYearlyMonthlyTotals,
+  MonthlyTotalPoint,
+} from '@/services/transactionService';
+import { THAI_MONTHS_SHORT } from '@/utils/dateUtils';
 
 interface YearlyTrendBarChartProps {
-  transactions: Transaction[];
+  availableYears: number[];
+  refreshKey: number;
 }
 
 const BAR_OPTIONS = {
@@ -47,62 +51,56 @@ const BAR_OPTIONS = {
 };
 
 export default function YearlyTrendBarChart({
-  transactions,
+  availableYears,
+  refreshKey,
 }: Readonly<YearlyTrendBarChartProps>) {
-  const availableYears = useMemo(() => {
-    const years = new Set<number>();
-    years.add(new Date().getFullYear());
-    transactions.forEach((tx) => {
-      const dateStr = getTxDateKey(tx);
-      if (dateStr.length >= 4) {
-        const y = Number.parseInt(dateStr.slice(0, 4), 10);
-        if (!Number.isNaN(y)) years.add(y);
-      }
-    });
-    return Array.from(years).sort((a, b) => b - a);
-  }, [transactions]);
-
   const [selectedYear, setSelectedYear] = useState<number>(() =>
     new Date().getFullYear()
   );
+  const [monthlyTotals, setMonthlyTotals] = useState<MonthlyTotalPoint>({
+    income: new Array(12).fill(0),
+    expense: new Array(12).fill(0),
+  });
 
-  const yearChartData = useMemo(() => {
-    const incData: number[] = [];
-    const expData: number[] = [];
+  useEffect(() => {
+    let active = true;
+    fetchYearlyMonthlyTotals(selectedYear)
+      .then((res) => {
+        if (active) setMonthlyTotals(res);
+      })
+      .catch(() => {
+        if (active) {
+          setMonthlyTotals({
+            income: new Array(12).fill(0),
+            expense: new Array(12).fill(0),
+          });
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [selectedYear, refreshKey]);
 
-    for (let i = 0; i < 12; i++) {
-      const mPrefix = `${selectedYear}-${String(i + 1).padStart(2, '0')}`;
-      const mTxs = transactions.filter((t) =>
-        getTxDateKey(t).startsWith(mPrefix)
-      );
-      const inc = mTxs
-        .filter((t) => t.type === 'income')
-        .reduce((s, t) => s + Number(t.amount || 0), 0);
-      const exp = mTxs
-        .filter((t) => t.type === 'expense')
-        .reduce((s, t) => s + Number(t.amount || 0), 0);
-      incData.push(inc);
-      expData.push(exp);
-    }
-
-    return {
+  const yearChartData = useMemo(
+    () => ({
       labels: THAI_MONTHS_SHORT,
       datasets: [
         {
           label: 'รายรับ',
-          data: incData,
+          data: monthlyTotals.income,
           backgroundColor: '#2ecc71',
           borderRadius: 6,
         },
         {
           label: 'รายจ่าย',
-          data: expData,
+          data: monthlyTotals.expense,
           backgroundColor: '#f72585',
           borderRadius: 6,
         },
       ],
-    };
-  }, [transactions, selectedYear]);
+    }),
+    [monthlyTotals]
+  );
 
   return (
     <div className="app-card">

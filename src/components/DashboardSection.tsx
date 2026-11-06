@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArcElement,
   BarElement,
@@ -11,8 +11,11 @@ import {
   Title,
   Tooltip,
 } from 'chart.js';
+import {
+  fetchTransactionsByPeriod,
+  MonthlyBankSummaryRow,
+} from '@/services/transactionService';
 import { Transaction } from '@/types/transaction';
-import { getTxDateKey } from '@/utils/dateUtils';
 import DashboardHeader, { GroupByOption } from './dashboard/DashboardHeader';
 import SummaryStatCards from './dashboard/SummaryStatCards';
 import ProportionDoughnutCard from './dashboard/ProportionDoughnutCard';
@@ -30,40 +33,56 @@ ChartJS.register(
 );
 
 interface DashboardSectionProps {
-  transactions: Transaction[];
+  bankSummaryRows: MonthlyBankSummaryRow[];
   selectedMonth: string;
   setSelectedMonth: (m: string) => void;
   availableMonths: string[];
+  availableYears: number[];
+  refreshKey: number;
 }
 
 export default function DashboardSection({
-  transactions,
+  bankSummaryRows,
   selectedMonth,
   setSelectedMonth,
   availableMonths,
+  availableYears,
+  refreshKey,
 }: Readonly<DashboardSectionProps>) {
   const [groupBy, setGroupBy] = useState<GroupByOption>('bank');
+  const [descTransactions, setDescTransactions] = useState<Transaction[]>([]);
 
-  const monthlyTxs = useMemo(() => {
-    if (selectedMonth === 'ALL') return transactions;
-    return transactions.filter((t) =>
-      getTxDateKey(t).startsWith(selectedMonth)
-    );
-  }, [transactions, selectedMonth]);
+  // Lazy-load รายการธุรกรรมเฉพาะเมื่อผู้ใช้กดสลับกราฟเป็น "แยกตามรายการ (description)"
+  useEffect(() => {
+    if (groupBy !== 'description') return;
+
+    let active = true;
+    fetchTransactionsByPeriod(selectedMonth)
+      .then((rows) => {
+        if (active) setDescTransactions(rows);
+      })
+      .catch(() => {
+        if (active) setDescTransactions([]);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [groupBy, selectedMonth, refreshKey]);
 
   const { totalIncome, totalExpense, balance } = useMemo(() => {
-    const inc = monthlyTxs
-      .filter((t) => t.type === 'income')
-      .reduce((sum, t) => sum + Number(t.amount || 0), 0);
-    const exp = monthlyTxs
-      .filter((t) => t.type === 'expense')
-      .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+    const inc = bankSummaryRows
+      .filter((r) => r.type === 'income')
+      .reduce((sum, r) => sum + Number(r.total_amount || 0), 0);
+    const exp = bankSummaryRows
+      .filter((r) => r.type === 'expense')
+      .reduce((sum, r) => sum + Number(r.total_amount || 0), 0);
     return {
       totalIncome: inc,
       totalExpense: exp,
       balance: inc - exp,
     };
-  }, [monthlyTxs]);
+  }, [bankSummaryRows]);
 
   const groupSuffix = groupBy === 'bank' ? 'ธนาคาร' : 'รายละเอียด';
 
@@ -84,32 +103,36 @@ export default function DashboardSection({
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        <ProportionDoughnutCard
+          title={`สัดส่วนรายรับ (${groupSuffix})`}
+          iconColorClass="text-[#2ecc71]"
+          emptyMessage="ไม่มีข้อมูลรายรับในเดือนนี้"
+          type="income"
+          bankSummaryRows={bankSummaryRows}
+          transactions={descTransactions}
+          groupBy={groupBy}
+        />
 
         <ProportionDoughnutCard
           title={`สัดส่วนรายจ่าย (${groupSuffix})`}
           iconColorClass="text-[#e63946]"
           emptyMessage="ไม่มีข้อมูลรายจ่ายในเดือนนี้"
           type="expense"
-          transactions={monthlyTxs}
-          groupBy={groupBy}
-        />
-
-        <ProportionDoughnutCard
-          title={`สัดส่วนรายรับ (${groupSuffix})`}
-          iconColorClass="text-[#2ecc71]"
-          emptyMessage="ไม่มีข้อมูลรายรับในเดือนนี้"
-          type="income"
-          transactions={monthlyTxs}
+          bankSummaryRows={bankSummaryRows}
+          transactions={descTransactions}
           groupBy={groupBy}
         />
 
         <BankBreakdownCard
-          transactions={monthlyTxs}
+          bankSummaryRows={bankSummaryRows}
           totalVolume={totalIncome + totalExpense}
         />
       </div>
 
-      <YearlyTrendBarChart transactions={transactions} />
+      <YearlyTrendBarChart
+        availableYears={availableYears}
+        refreshKey={refreshKey}
+      />
     </div>
   );
 }

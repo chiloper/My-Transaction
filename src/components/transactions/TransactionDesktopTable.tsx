@@ -5,12 +5,14 @@ import { getBankColor, Transaction } from '@/types/transaction';
 
 interface TransactionDesktopTableProps {
   transactions: Transaction[];
+  loading?: boolean;
   onInspectRaw: (tx: Transaction) => void;
   onDeleteTransaction: (id: number) => void;
 }
 
 export default function TransactionDesktopTable({
   transactions,
+  loading,
   onInspectRaw,
   onDeleteTransaction,
 }: Readonly<TransactionDesktopTableProps>) {
@@ -28,7 +30,13 @@ export default function TransactionDesktopTable({
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100 text-sm">
-          {transactions.length === 0 ? (
+          {loading ? (
+            <tr>
+              <td colSpan={6} className="py-10 text-center text-gray-400">
+                <i className="fas fa-spinner fa-spin mr-2"></i>กำลังโหลดข้อมูล...
+              </td>
+            </tr>
+          ) : transactions.length === 0 ? (
             <tr>
               <td colSpan={6} className="py-10 text-center text-gray-400">
                 ไม่พบรายการธุรกรรมตามเงื่อนไขที่เลือก
@@ -106,7 +114,7 @@ export default function TransactionDesktopTable({
                   </td>
                   <td className="py-3 px-4 text-center whitespace-nowrap">
                     <div className="inline-flex items-center gap-1.5">
-                      {tx.raw_body && (
+                      {(tx.email_id || tx.raw_body) && (
                         <button
                           type="button"
                           onClick={() => onInspectRaw(tx)}

@@ -35,10 +35,14 @@ export default function TransactionFilterBar({
     <div className="mb-5 p-4 bg-gray-50 rounded-xl border border-gray-100">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         <div>
-          <label className="block text-xs text-gray-500 mb-1">
+          <label
+            htmlFor="filter-bank"
+            className="block text-xs text-gray-500 mb-1"
+          >
             ธนาคาร (bank)
           </label>
           <select
+            id="filter-bank"
             value={filterBank}
             onChange={(e) => setFilterBank(e.target.value)}
             className="w-full bg-white border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm"
@@ -53,10 +57,14 @@ export default function TransactionFilterBar({
         </div>
 
         <div>
-          <label className="block text-xs text-gray-500 mb-1">
+          <label
+            htmlFor="filter-type"
+            className="block text-xs text-gray-500 mb-1"
+          >
             ประเภท (type)
           </label>
           <select
+            id="filter-type"
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
             className="w-full bg-white border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm"
@@ -68,8 +76,14 @@ export default function TransactionFilterBar({
         </div>
 
         <div>
-          <label className="block text-xs text-gray-500 mb-1">เริ่มวันที่</label>
+          <label
+            htmlFor="filter-start-date"
+            className="block text-xs text-gray-500 mb-1"
+          >
+            เริ่มวันที่
+          </label>
           <input
+            id="filter-start-date"
             type="date"
             value={filterStartDate}
             onChange={(e) => setFilterStartDate(e.target.value)}
@@ -78,8 +92,14 @@ export default function TransactionFilterBar({
         </div>
 
         <div>
-          <label className="block text-xs text-gray-500 mb-1">ถึงวันที่</label>
+          <label
+            htmlFor="filter-end-date"
+            className="block text-xs text-gray-500 mb-1"
+          >
+            ถึงวันที่
+          </label>
           <input
+            id="filter-end-date"
             type="date"
             value={filterEndDate}
             onChange={(e) => setFilterEndDate(e.target.value)}
@@ -88,11 +108,15 @@ export default function TransactionFilterBar({
         </div>
 
         <div>
-          <label className="block text-xs text-gray-500 mb-1">
+          <label
+            htmlFor="filter-search"
+            className="block text-xs text-gray-500 mb-1"
+          >
             ค้นหารายละเอียด
           </label>
           <div className="flex gap-1.5">
             <input
+              id="filter-search"
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}

@@ -1,6 +1,7 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { fetchTransactionRawBody } from '@/services/transactionService';
 import { Transaction } from '@/types/transaction';
 
 interface RawBodyModalProps {
@@ -12,6 +13,38 @@ export default function RawBodyModal({
   transaction,
   onClose,
 }: Readonly<RawBodyModalProps>) {
+  const [rawBody, setRawBody] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!transaction) {
+      setRawBody(null);
+      return;
+    }
+
+    if (transaction.raw_body !== undefined) {
+      setRawBody(transaction.raw_body);
+      return;
+    }
+
+    let active = true;
+    setLoading(true);
+    fetchTransactionRawBody(transaction.id)
+      .then((text) => {
+        if (active) setRawBody(text);
+      })
+      .catch(() => {
+        if (active) setRawBody('ไม่สามารถดึงข้อมูล raw_body ได้');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [transaction]);
+
   if (!transaction) return null;
 
   return (
@@ -58,9 +91,15 @@ export default function RawBodyModal({
             <span className="text-xs text-gray-500 font-medium block mb-1">
               ข้อความต้นฉบับ (raw_body):
             </span>
-            <pre className="bg-gray-900 text-gray-100 p-3.5 rounded-xl text-xs whitespace-pre-wrap break-words max-h-60 overflow-y-auto font-mono custom-scrollbar">
-              {transaction.raw_body || 'ไม่มีข้อมูล raw_body'}
-            </pre>
+            {loading ? (
+              <div className="bg-gray-900 text-gray-300 p-6 rounded-xl text-xs text-center">
+                <i className="fas fa-spinner fa-spin mr-2"></i>กำลังโหลดข้อความต้นฉบับ...
+              </div>
+            ) : (
+              <pre className="bg-gray-900 text-gray-100 p-3.5 rounded-xl text-xs whitespace-pre-wrap break-words max-h-60 overflow-y-auto font-mono custom-scrollbar">
+                {rawBody || 'ไม่มีข้อมูล raw_body'}
+              </pre>
+            )}
           </div>
         </div>
 

@@ -5,15 +5,25 @@ import { getBankColor, Transaction } from '@/types/transaction';
 
 interface TransactionMobileListProps {
   transactions: Transaction[];
+  loading?: boolean;
   onInspectRaw: (tx: Transaction) => void;
   onDeleteTransaction: (id: number) => void;
 }
 
 export default function TransactionMobileList({
   transactions,
+  loading,
   onInspectRaw,
   onDeleteTransaction,
 }: Readonly<TransactionMobileListProps>) {
+  if (loading) {
+    return (
+      <div className="md:hidden py-8 text-center text-gray-400 text-sm">
+        <i className="fas fa-spinner fa-spin mr-2"></i>กำลังโหลดข้อมูล...
+      </div>
+    );
+  }
+
   return (
     <div className="md:hidden space-y-3">
       {transactions.length === 0 ? (
@@ -72,7 +82,7 @@ export default function TransactionMobileList({
                   })}
                 </span>
                 <div className="flex items-center gap-1">
-                  {tx.raw_body && (
+                  {(tx.email_id || tx.raw_body) && (
                     <button
                       type="button"
                       onClick={() => onInspectRaw(tx)}

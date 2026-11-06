@@ -18,12 +18,15 @@ export default function HomePage() {
   const [filterEndDate, setFilterEndDate] = useState('');
 
   const {
-    transactions,
+    bankSummaryRows,
     loading,
     errorMessage,
     selectedMonth,
     setSelectedMonth,
     availableMonths,
+    availableYears,
+    knownBanks,
+    refreshKey,
     fetchTransactions,
     addTransactions,
     deleteTransaction,
@@ -58,23 +61,26 @@ export default function HomePage() {
 
           {activeTab === 'dashboard' && (
             <DashboardSection
-              transactions={transactions}
+              bankSummaryRows={bankSummaryRows}
               selectedMonth={selectedMonth}
               setSelectedMonth={setSelectedMonth}
               availableMonths={availableMonths}
+              availableYears={availableYears}
+              refreshKey={refreshKey}
             />
           )}
 
           {activeTab === 'calendar' && (
             <CalendarSection
-              transactions={transactions}
+              refreshKey={refreshKey}
               onViewDayInHistory={handleViewDayInHistory}
             />
           )}
 
           {activeTab === 'transactions' && (
             <TransactionsSection
-              transactions={transactions}
+              knownBanks={knownBanks}
+              refreshKey={refreshKey}
               onAddTransactions={addTransactions}
               onDeleteTransaction={deleteTransaction}
               filterStartDate={filterStartDate}

@@ -97,10 +97,14 @@ export default function TransactionFormCard({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">
+                    <label
+                      htmlFor={`tx-date-${card.tempId}`}
+                      className="block text-xs text-gray-500 mb-1"
+                    >
                       วันที่และเวลา
                     </label>
                     <input
+                      id={`tx-date-${card.tempId}`}
                       type="datetime-local"
                       value={card.transaction_date}
                       onChange={(e) =>
@@ -112,10 +116,14 @@ export default function TransactionFormCard({
                   </div>
 
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">
+                    <label
+                      htmlFor={`tx-type-${card.tempId}`}
+                      className="block text-xs text-gray-500 mb-1"
+                    >
                       ประเภท
                     </label>
                     <select
+                      id={`tx-type-${card.tempId}`}
                       value={card.type}
                       onChange={(e) =>
                         updateDraft(
@@ -132,10 +140,14 @@ export default function TransactionFormCard({
                   </div>
 
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">
+                    <label
+                      htmlFor={`tx-bank-${card.tempId}`}
+                      className="block text-xs text-gray-500 mb-1"
+                    >
                       ธนาคาร / ช่องทาง (bank)
                     </label>
                     <input
+                      id={`tx-bank-${card.tempId}`}
                       list={`bank-list-${card.tempId}`}
                       type="text"
                       value={card.bank}
@@ -156,10 +168,14 @@ export default function TransactionFormCard({
                   </div>
 
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">
+                    <label
+                      htmlFor={`tx-amount-${card.tempId}`}
+                      className="block text-xs text-gray-500 mb-1"
+                    >
                       จำนวนเงิน (บาท)
                     </label>
                     <input
+                      id={`tx-amount-${card.tempId}`}
                       type="number"
                       step="0.01"
                       min="0.01"
@@ -179,6 +195,8 @@ export default function TransactionFormCard({
 
                   <div className="sm:col-span-2 lg:col-span-4">
                     <input
+                      id={`tx-desc-${card.tempId}`}
+                      aria-label="รายละเอียดเพิ่มเติม"
                       type="text"
                       placeholder="รายละเอียดเพิ่มเติม (description เช่น ค่าอาหาร, เงินเดือน, โอนเงิน...)"
                       value={card.description}

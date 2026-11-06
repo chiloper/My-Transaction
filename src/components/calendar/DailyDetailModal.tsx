@@ -1,21 +1,47 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { fetchTransactionsByDate } from '@/services/transactionService';
 import { getBankColor, Transaction } from '@/types/transaction';
 
 interface DailyDetailModalProps {
   dateStr: string | null;
-  transactions: Transaction[];
   onClose: () => void;
   onViewDayInHistory: (dateStr: string) => void;
 }
 
 export default function DailyDetailModal({
   dateStr,
-  transactions,
   onClose,
   onViewDayInHistory,
 }: Readonly<DailyDetailModalProps>) {
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!dateStr) {
+      setTransactions([]);
+      return;
+    }
+
+    let active = true;
+    setLoading(true);
+    fetchTransactionsByDate(dateStr)
+      .then((rows) => {
+        if (active) setTransactions(rows);
+      })
+      .catch(() => {
+        if (active) setTransactions([]);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [dateStr]);
+
   if (!dateStr) return null;
 
   return (
@@ -32,7 +58,9 @@ export default function DailyDetailModal({
               })}
             </h5>
             <p className="text-xs text-indigo-100 m-0 mt-0.5">
-              ทั้งหมด {transactions.length} รายการ
+              {loading
+                ? 'กำลังโหลด...'
+                : `ทั้งหมด ${transactions.length.toLocaleString()} รายการ`}
             </p>
           </div>
           <button
@@ -45,7 +73,11 @@ export default function DailyDetailModal({
         </div>
 
         <div className="p-5 max-h-[60vh] overflow-y-auto space-y-3 custom-scrollbar">
-          {transactions.length === 0 ? (
+          {loading ? (
+            <div className="text-center py-8 text-gray-400 text-sm">
+              <i className="fas fa-spinner fa-spin mr-2"></i>กำลังดึงรายการของวันนี้...
+            </div>
+          ) : transactions.length === 0 ? (
             <div className="text-center py-8 text-gray-400">
               <i className="fas fa-calendar-day text-3xl mb-2 opacity-40"></i>
               <p className="m-0 text-sm">ไม่มีรายการธุรกรรมในวันนี้</p>

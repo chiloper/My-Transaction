@@ -1,12 +1,15 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
-import { Transaction } from '@/types/transaction';
-import { formatShortAmount, getTxDateKey } from '@/utils/dateUtils';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  DailySummaryRow,
+  fetchDailySummaryByMonth,
+} from '@/services/transactionService';
+import { formatShortAmount } from '@/utils/dateUtils';
 import DailyDetailModal from './calendar/DailyDetailModal';
 
 interface CalendarSectionProps {
-  transactions: Transaction[];
+  refreshKey: number;
   onViewDayInHistory: (dateStr: string) => void;
 }
 
@@ -21,14 +24,32 @@ const WEEKDAYS = [
 ];
 
 export default function CalendarSection({
-  transactions,
+  refreshKey,
   onViewDayInHistory,
 }: Readonly<CalendarSectionProps>) {
   const [calendarDate, setCalendarDate] = useState<Date>(() => new Date());
+  const [dailySummaryRows, setDailySummaryRows] = useState<DailySummaryRow[]>(
+    []
+  );
   const [selectedDayModal, setSelectedDayModal] = useState<string | null>(null);
 
   const year = calendarDate.getFullYear();
   const month = calendarDate.getMonth();
+  const yearMonthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
+
+  useEffect(() => {
+    let active = true;
+    fetchDailySummaryByMonth(yearMonthKey)
+      .then((rows) => {
+        if (active) setDailySummaryRows(rows);
+      })
+      .catch(() => {
+        if (active) setDailySummaryRows([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [yearMonthKey, refreshKey]);
 
   const changeCalendarMonth = (offset: number) => {
     setCalendarDate(
@@ -57,29 +78,24 @@ export default function CalendarSection({
   const dailyMap = useMemo(() => {
     const map: Record<
       string,
-      { inc: number; exp: number; bal: number; txs: Transaction[] }
+      { inc: number; exp: number; bal: number; count: number }
     > = {};
 
-    transactions.forEach((tx) => {
-      const dateStr = getTxDateKey(tx);
+    dailySummaryRows.forEach((row) => {
+      const dateStr = row.tx_date;
       if (!dateStr) return;
       if (!map[dateStr]) {
-        map[dateStr] = { inc: 0, exp: 0, bal: 0, txs: [] };
+        map[dateStr] = { inc: 0, exp: 0, bal: 0, count: 0 };
       }
-      const amt = Number(tx.amount || 0);
-      if (tx.type === 'income') map[dateStr].inc += amt;
+      const amt = Number(row.total_amount || 0);
+      if (row.type === 'income') map[dateStr].inc += amt;
       else map[dateStr].exp += amt;
       map[dateStr].bal = map[dateStr].inc - map[dateStr].exp;
-      map[dateStr].txs.push(tx);
+      map[dateStr].count += Number(row.tx_count || 0);
     });
 
     return map;
-  }, [transactions]);
-
-  const selectedDayTxs = useMemo(() => {
-    if (!selectedDayModal) return [];
-    return dailyMap[selectedDayModal]?.txs || [];
-  }, [dailyMap, selectedDayModal]);
+  }, [dailySummaryRows]);
 
   return (
     <div>
@@ -129,7 +145,10 @@ export default function CalendarSection({
 
           <div className="calendar-grid">
             {Array.from({ length: firstDayOfWeek }, (_, idx) => (
-              <div key={`empty-${year}-${month}-${idx}`} className="calendar-day empty"></div>
+              <div
+                key={`empty-${year}-${month}-${idx}`}
+                className="calendar-day empty"
+              ></div>
             ))}
 
             {Array.from({ length: daysInMonth }, (_, idx) => {
@@ -150,9 +169,9 @@ export default function CalendarSection({
                 >
                   <div className="flex justify-between items-start w-full">
                     <span className="day-number">{day}</span>
-                    {summary && summary.txs.length > 0 && (
+                    {summary && summary.count > 0 && (
                       <span className="hidden sm:inline-block text-[10px] bg-indigo-50 text-[#4361ee] px-1.5 py-0.5 rounded-full font-medium">
-                        {summary.txs.length}
+                        {summary.count}
                       </span>
                     )}
                   </div>
@@ -207,7 +226,6 @@ export default function CalendarSection({
 
       <DailyDetailModal
         dateStr={selectedDayModal}
-        transactions={selectedDayTxs}
         onClose={() => setSelectedDayModal(null)}
         onViewDayInHistory={onViewDayInHistory}
       />

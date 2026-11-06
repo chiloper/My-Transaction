@@ -2,6 +2,7 @@
 
 import React, { useMemo } from 'react';
 import { Doughnut } from 'react-chartjs-2';
+import { MonthlyBankSummaryRow } from '@/services/transactionService';
 import { CHART_PALETTE, getBankColor, Transaction } from '@/types/transaction';
 import { GroupByOption } from './DashboardHeader';
 
@@ -10,6 +11,7 @@ interface ProportionDoughnutCardProps {
   iconColorClass: string;
   emptyMessage: string;
   type: 'income' | 'expense';
+  bankSummaryRows: MonthlyBankSummaryRow[];
   transactions: Transaction[];
   groupBy: GroupByOption;
 }
@@ -40,20 +42,30 @@ export default function ProportionDoughnutCard({
   iconColorClass,
   emptyMessage,
   type,
+  bankSummaryRows,
   transactions,
   groupBy,
 }: Readonly<ProportionDoughnutCardProps>) {
   const { chartData, legendItems } = useMemo(() => {
     const map: Record<string, number> = {};
-    transactions
-      .filter((t) => t.type === type)
-      .forEach((t) => {
-        const key =
-          groupBy === 'bank'
-            ? (t.bank || 'ไม่ระบุธนาคาร').trim()
-            : (t.description || t.bank || 'ไม่ระบุรายละเอียด').trim();
-        map[key] = (map[key] || 0) + Number(t.amount || 0);
-      });
+
+    if (groupBy === 'bank') {
+      // ใช้ข้อมูลที่รวมยอดมาจาก View monthly_bank_summary โดยตรง
+      bankSummaryRows
+        .filter((r) => r.type === type)
+        .forEach((r) => {
+          const key = (r.bank || 'ไม่ระบุธนาคาร').trim();
+          map[key] = (map[key] || 0) + Number(r.total_amount || 0);
+        });
+    } else {
+      // กรณีเลือกแยกตามรายละเอียด (description)
+      transactions
+        .filter((t) => t.type === type)
+        .forEach((t) => {
+          const key = (t.description || t.bank || 'ไม่ระบุรายละเอียด').trim();
+          map[key] = (map[key] || 0) + Number(t.amount || 0);
+        });
+    }
 
     const entries = Object.entries(map).sort((a, b) => b[1] - a[1]);
     const totalSum = entries.reduce((s, e) => s + e[1], 0);
@@ -87,7 +99,7 @@ export default function ProportionDoughnutCard({
       },
       legendItems: items,
     };
-  }, [transactions, type, groupBy]);
+  }, [bankSummaryRows, transactions, type, groupBy]);
 
   return (
     <div className="app-card mb-0 flex flex-col">
