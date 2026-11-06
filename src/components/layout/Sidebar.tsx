@@ -69,12 +69,6 @@ export default function Sidebar({
             ))}
           </nav>
         </div>
-
-        <div className="p-4 border-t border-gray-100 text-center">
-          <small className="text-gray-400 text-xs block">
-            Schema: <code className="text-[#4361ee]">autoscript.transactions</code>
-          </small>
-        </div>
       </aside>
     </>
   );

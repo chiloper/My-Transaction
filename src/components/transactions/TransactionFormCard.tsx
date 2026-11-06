@@ -30,6 +30,7 @@ export default function TransactionFormCard({
   onAddTransactions,
   onSuccess,
 }: Readonly<TransactionFormCardProps>) {
+  const [isOpen, setIsOpen] = useState(false);
   const [drafts, setDrafts] = useState<DraftCard[]>(() => [createInitialDraft(1)]);
   const [submitting, setSubmitting] = useState(false);
 
@@ -61,16 +62,59 @@ export default function TransactionFormCard({
     try {
       await onAddTransactions(valid.map(({ tempId: _, ...rest }) => rest));
       setDrafts([createInitialDraft()]);
+      setIsOpen(false);
       onSuccess?.();
     } finally {
       setSubmitting(false);
     }
   };
 
+  if (!isOpen) {
+    return (
+      <div className="app-card border border-indigo-100 hover:border-[#4361ee]/60 bg-white transition-all duration-200 mb-6 overflow-hidden shadow-2xs hover:shadow-xs">
+        <button
+          type="button"
+          onClick={() => setIsOpen(true)}
+          className="w-full text-left px-5 py-3.5 flex items-center justify-between text-gray-800 hover:bg-indigo-50/30 transition cursor-pointer"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#4361ee] text-white flex items-center justify-center text-sm shadow-xs shrink-0">
+              <i className="fas fa-plus"></i>
+            </div>
+            <div>
+              <h5 className="font-bold text-sm sm:text-base text-gray-900 m-0 flex items-center gap-2">
+                บันทึกรายการใหม่
+              </h5>
+              <p className="text-xs text-gray-500 m-0 mt-0.5">
+                กดที่นี่เพื่อเปิดแบบฟอร์มบันทึกรายรับ-รายจ่าย
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-[#4361ee] bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100 shrink-0">
+            <span>เปิดแบบฟอร์ม</span>
+            <i className="fas fa-chevron-down text-[10px]"></i>
+          </div>
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="app-card border-2 border-[#4361ee] overflow-hidden mb-6">
-      <div className="bg-[#4361ee] text-white px-6 py-4 font-semibold flex items-center">
-        <i className="fas fa-plus-circle mr-2"></i>บันทึกรายการใหม่
+    <div className="app-card border-2 border-[#4361ee] overflow-hidden mb-6 shadow-xs animate-in fade-in duration-150">
+      <div className="bg-[#4361ee] text-white px-5 sm:px-6 py-3.5 font-semibold flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <i className="fas fa-plus-circle"></i>
+          <span>บันทึกรายการใหม่</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsOpen(false)}
+          className="text-xs bg-white/20 hover:bg-white/30 text-white px-2.5 py-1 rounded-lg transition flex items-center gap-1.5 cursor-pointer"
+          title="ซ่อนแบบฟอร์ม"
+        >
+          <span>ซ่อนแบบฟอร์ม</span>
+          <i className="fas fa-chevron-up text-[10px]"></i>
+        </button>
       </div>
       <div className="app-card-body">
         <form onSubmit={handleSubmit}>
@@ -212,13 +256,22 @@ export default function TransactionFormCard({
           </div>
 
           <div className="flex flex-wrap justify-between items-center gap-3 mt-4">
-            <button
-              type="button"
-              onClick={addDraftCard}
-              className="px-4 py-2 rounded-full border border-gray-400 text-gray-600 hover:bg-gray-100 text-sm font-medium transition cursor-pointer"
-            >
-              <i className="fas fa-plus mr-1.5"></i>เพิ่มช่องกรอก
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={addDraftCard}
+                className="px-4 py-2 rounded-full border border-gray-400 text-gray-600 hover:bg-gray-100 text-sm font-medium transition cursor-pointer"
+              >
+                <i className="fas fa-plus mr-1.5"></i>เพิ่มช่องกรอก
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsOpen(false)}
+                className="px-4 py-2 rounded-full border border-gray-300 text-gray-500 hover:bg-gray-100 text-sm font-medium transition cursor-pointer"
+              >
+                ยกเลิก
+              </button>
+            </div>
 
             <button
               type="submit"
